@@ -10,14 +10,10 @@ use std::{
 };
 
 use num_traits::{AsPrimitive, Float};
-use tracing::instrument;
 
 pub trait Bound: Float + MulAssign + AddAssign + DivAssign + Mul + From<f32> + Sum {}
 impl<T> Bound for T where T: Float + MulAssign + AddAssign + DivAssign + Mul + From<f32> + Sum {}
 
-#[instrument(skip(
-    y, n, np, ns, nt, nl, isdeg, itdeg, ildeg, nsjump, ntjump, nljump, ni, no, rw, season, trend
-))]
 pub fn stl<T: Bound + 'static>(
     // Input time series.
     y: &[T],
@@ -81,7 +77,6 @@ pub fn stl<T: Bound + 'static>(
     }
 }
 
-#[instrument(skip(y, n, len, ideg, njump, userw, rw, ys, res))]
 fn ess<T: Bound + 'static>(
     y: &[T],
     n: usize,
@@ -105,7 +100,6 @@ fn ess<T: Bound + 'static>(
 
     let newnj = njump.min(n - 1);
     if len >= n {
-        let _span = tracing::info_span!("ess len >= n").entered();
         nleft = 1;
         nright = n;
         let mut i = 1;
@@ -129,14 +123,13 @@ fn ess<T: Bound + 'static>(
             i += newnj;
         }
     } else if newnj == 1 {
-        let _span = tracing::info_span!("ess newnj == 1").entered();
         // newnj equal to one, len less than n
         let nsh = (len + 1) / 2;
         nleft = 1;
         nright = len;
         for i in 0..n {
             // fitted value at i
-            if i+1 > nsh && nright != n {
+            if i + 1 > nsh && nright != n {
                 nleft += 1;
                 nright += 1;
             }
@@ -159,7 +152,6 @@ fn ess<T: Bound + 'static>(
         }
     } else {
         // newnj greater than one, len less than n
-        let _span = tracing::info_span!("ess newnj > 1, len < n").entered();
         let nsh = (len + 1) / 2;
         let mut i = 1;
         while i <= n {
@@ -195,9 +187,7 @@ fn ess<T: Bound + 'static>(
     }
 
     if newnj != 1 {
-        let _span1 = tracing::info_span!("ess newnj != 1").entered();
         let mut i = 1;
-        let span2 = tracing::info_span!("ess newnj != 1: while loop").entered();
         while i <= n - newnj {
             let delta = (ys[i + newnj - 1] - ys[i - 1]) / newnj.as_();
             for j in i..i + newnj - 1 {
@@ -205,10 +195,8 @@ fn ess<T: Bound + 'static>(
             }
             i += newnj;
         }
-        drop(span2);
         let k = ((n - 1) / newnj) * newnj + 1;
         if k != n {
-            let _span = tracing::info_span!("ess newnj != 1: k != n").entered();
             let ok = est(
                 y,
                 n,
@@ -235,7 +223,6 @@ fn ess<T: Bound + 'static>(
     }
 }
 
-#[instrument(skip(y, n, len, ideg, xs, ys, nleft, nright, w, userw, rw))]
 fn est<T: Bound + 'static>(
     y: &[T],
     n: usize,
@@ -332,7 +319,6 @@ where
     }
 }
 
-#[instrument(skip(x, n, np, trend, work))]
 fn fts<T: Bound + 'static>(x: &[T], n: usize, np: usize, trend: &mut [T], work: &mut [T])
 where
     usize: AsPrimitive<T>,
@@ -342,7 +328,6 @@ where
     ma(work, n - 2 * np + 2, 3, trend);
 }
 
-#[instrument(skip(x, n, len, ave))]
 fn ma<T: Bound + 'static>(x: &[T], n: usize, len: usize, ave: &mut [T])
 where
     usize: AsPrimitive<T>,
@@ -368,10 +353,6 @@ where
     }
 }
 
-#[instrument(skip(
-    y, n, np, ns, nt, nl, isdeg, itdeg, ildeg, nsjump, ntjump, nljump, ni, userw, rw, season,
-    trend, work1, work2, work3, work4, work5
-))]
 fn onestp<T: Bound + 'static>(
     y: &[T],
     n: usize,
@@ -421,7 +402,6 @@ fn onestp<T: Bound + 'static>(
     }
 }
 
-#[instrument(skip(y, fit, rw))]
 fn rwts<T: Bound>(y: &[T], n: usize, fit: &[T], rw: &mut [T]) {
     for i in 0..n {
         rw[i] = (y[i] - fit[i]).abs();
@@ -449,9 +429,6 @@ fn rwts<T: Bound>(y: &[T], n: usize, fit: &[T], rw: &mut [T]) {
 }
 
 /// Seasonal smoothing.
-#[instrument(skip(
-    y, n, np, ns, isdeg, nsjump, userw, rw, season, work1, work2, work3, work4
-))]
 fn ss<T: Bound + 'static>(
     y: &[T],
     n: usize,

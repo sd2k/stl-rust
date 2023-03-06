@@ -1,6 +1,4 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use pprof::criterion::{Output, PProfProfiler};
-use tracing_subscriber::layer::SubscriberExt;
 
 static CO2_F64: &[f64] = &[
     315.42, 316.31, 316.5, 317.56, 318.13, 318.0, 316.39, 314.65, 313.68, 313.18, 314.66, 315.43,
@@ -45,9 +43,6 @@ static CO2_F64: &[f64] = &[
 ];
 
 fn co2_f64(c: &mut Criterion) {
-    // let _guard = tracing::subscriber::set_default(
-    //     tracing_subscriber::registry().with(tracing_tracy::TracyLayer::new()),
-    // );
     c.bench_function("co2_f64", |b| {
         b.iter(|| {
             stlrs::params().seasonal_length(7).fit(CO2_F64, 12).unwrap();
@@ -56,9 +51,6 @@ fn co2_f64(c: &mut Criterion) {
 }
 
 fn co2_f64_fast(c: &mut Criterion) {
-    // let _guard = tracing::subscriber::set_default(
-    //     tracing_subscriber::registry().with(tracing_tracy::TracyLayer::new()),
-    // );
     c.bench_function("co2_f64_fastjump", |b| {
         b.iter(|| {
             stlrs::params()
@@ -126,10 +118,8 @@ fn co2_f32(c: &mut Criterion) {
     });
 }
 
-// criterion_group! {
-//     name = benches;
-//     // config = Criterion::default().with_profiler(PProfProfiler::new(1000, Output::Protobuf));
-//     targets = co2_f32, co2_f64, /*co2_f64_fast*/
-// }
-criterion_group!(benches, co2_f64);
-criterion_main!(benches);
+criterion_group! {
+    name = benches;
+    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Protobuf));
+    targets = co2_f32, co2_f64, co2_f64_fast
+}
