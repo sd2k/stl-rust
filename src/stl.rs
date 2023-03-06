@@ -271,10 +271,15 @@ where
         false
     } else {
         // weighted least squares
-        w.iter_mut()
-            .take(nright)
-            .skip(nleft - 1)
-            .for_each(|w| *w /= a);
+        w[nleft-1..nright].chunks_exact_mut(4).for_each(|w_chunk| {
+            for w_j in w_chunk {
+                *w_j /= a;
+            }
+        });
+        let missed = (nright - nleft + 1).rem_euclid(4);
+        for w_j in &mut w[nright-missed..nright] {
+            *w_j /= a;
+        }
 
         if h > T::zero() && ideg > 0 {
             // use linear fit
