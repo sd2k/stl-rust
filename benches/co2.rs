@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use pprof::criterion::{Output, PProfProfiler};
 
 static CO2_F64: &[f64] = &[
     315.42, 316.31, 316.5, 317.56, 318.13, 318.0, 316.39, 314.65, 313.68, 313.18, 314.66, 315.43,
@@ -123,3 +124,4 @@ criterion_group! {
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Protobuf));
     targets = co2_f32, co2_f64, co2_f64_fast
 }
+criterion_main!(benches);
