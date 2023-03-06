@@ -279,6 +279,10 @@ where
         &self.weights
     }
 
+    pub fn into_parts(self) -> (Vec<T>, Vec<T>, Vec<T>, Vec<T>) {
+        (self.seasonal, self.trend, self.remainder, self.weights)
+    }
+
     pub fn seasonal_strength(&self) -> T {
         let sr = self
             .seasonal()
