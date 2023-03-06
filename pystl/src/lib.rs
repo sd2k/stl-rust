@@ -2,7 +2,7 @@ use numpy::{IntoPyArray, PyArray1, PyReadonlyArrayDyn};
 use pyo3::{exceptions::PyException, prelude::*};
 use stlrs::{params, StlParams};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[pyclass]
 pub struct PySTL {
     stl: StlParams,
@@ -121,4 +121,3 @@ fn pystl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<StlFit>()?;
     Ok(())
 }
-
