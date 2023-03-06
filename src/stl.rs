@@ -134,9 +134,9 @@ fn ess<T: Bound + 'static>(
         let nsh = (len + 1) / 2;
         nleft = 1;
         nright = len;
-        for i in 1..=n {
+        for i in 0..n {
             // fitted value at i
-            if i > nsh && nright != n {
+            if i+1 > nsh && nright != n {
                 nleft += 1;
                 nright += 1;
             }
@@ -145,8 +145,8 @@ fn ess<T: Bound + 'static>(
                 n,
                 len,
                 ideg,
-                i.as_(),
-                &mut ys[i - 1],
+                (i + 1).as_(),
+                &mut ys[i],
                 nleft,
                 nright,
                 res,
@@ -154,7 +154,7 @@ fn ess<T: Bound + 'static>(
                 rw,
             );
             if !ok {
-                ys[i - 1] = y[i - 1];
+                ys[i] = y[i];
             }
         }
     } else {
@@ -200,8 +200,8 @@ fn ess<T: Bound + 'static>(
         let span2 = tracing::info_span!("ess newnj != 1: while loop").entered();
         while i <= n - newnj {
             let delta = (ys[i + newnj - 1] - ys[i - 1]) / newnj.as_();
-            for j in i + 1..=i + newnj - 1 {
-                ys[j - 1] = ys[i - 1] + delta * (j - i).as_();
+            for j in i..i + newnj - 1 {
+                ys[j] = ys[i - 1] + delta * (j - i + 1).as_();
             }
             i += newnj;
         }
@@ -226,8 +226,8 @@ fn ess<T: Bound + 'static>(
                 ys[n - 1] = y[n - 1];
                 if k != n - 1 {
                     let delta = (ys[n - 1] - ys[k - 1]) / (n - k).as_();
-                    for j in k + 1..=n - 1 {
-                        ys[j - 1] = ys[k - 1] + delta * (j - k).as_();
+                    for j in k..n {
+                        ys[j] = ys[k - 1] + delta * (j - k + 1).as_();
                     }
                 }
             }
@@ -469,15 +469,15 @@ fn ss<T: Bound + 'static>(
 ) where
     usize: AsPrimitive<T>,
 {
-    for j in 1..=np {
-        let k = (n - j) / np + 1;
+    for j in 0..np {
+        let k = (n - j - 1) / np + 1;
 
-        for i in 1..=k {
-            work1[i - 1] = y[(i - 1) * np + j - 1];
+        for i in 0..k {
+            work1[i] = y[i * np + j];
         }
         if userw {
-            for i in 1..=k {
-                work3[i - 1] = rw[(i - 1) * np + j - 1];
+            for i in 0..k {
+                work3[i] = rw[i * np + j];
             }
         }
         ess(
@@ -527,8 +527,8 @@ fn ss<T: Bound + 'static>(
         if !ok {
             work2[k + 1] = work2[k];
         }
-        for m in 1..=k + 2 {
-            season[(m - 1) * np + j - 1] = work2[m - 1];
+        for m in 0..k + 2 {
+            season[m * np + j] = work2[m];
         }
     }
 }
