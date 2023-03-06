@@ -13,9 +13,65 @@ pub struct PySTL {
 #[pymethods]
 impl PySTL {
     #[new]
-    pub fn new(y: PyReadonlyArrayDyn<'_, f64>, np: usize) -> PyResult<Self> {
+    pub fn new(
+        y: PyReadonlyArrayDyn<'_, f64>,
+        np: usize,
+        seasonal_length: Option<usize>,
+        trend_length: Option<usize>,
+        low_pass_length: Option<usize>,
+        seasonal_degree: Option<i32>,
+        trend_degree: Option<i32>,
+        low_pass_degree: Option<i32>,
+        seasonal_jump: Option<usize>,
+        trend_jump: Option<usize>,
+        low_pass_jump: Option<usize>,
+        outer_loops: Option<usize>,
+        inner_loops: Option<usize>,
+        fast_jump: Option<bool>,
+        robust: Option<bool>,
+    ) -> PyResult<Self> {
+        let mut stl = params();
+        if let Some(x) = seasonal_length {
+            stl.seasonal_length(x);
+        }
+        if let Some(x) = trend_length {
+            stl.trend_length(x);
+        }
+        if let Some(x) = low_pass_length {
+            stl.low_pass_length(x);
+        }
+        if let Some(x) = seasonal_degree {
+            stl.seasonal_degree(x);
+        }
+        if let Some(x) = trend_degree {
+            stl.trend_degree(x);
+        }
+        if let Some(x) = low_pass_degree {
+            stl.low_pass_degree(x);
+        }
+        if let Some(x) = seasonal_jump {
+            stl.seasonal_jump(x);
+        }
+        if let Some(x) = trend_jump {
+            stl.trend_jump(x);
+        }
+        if let Some(x) = low_pass_jump {
+            stl.low_pass_jump(x);
+        }
+        if let Some(x) = outer_loops {
+            stl.outer_loops(x);
+        }
+        if let Some(x) = inner_loops {
+            stl.inner_loops(x);
+        }
+        if let Some(x) = fast_jump {
+            stl.fast_jump(x);
+        }
+        if let Some(x) = robust {
+            stl.robust(x);
+        }
         Ok(Self {
-            stl: params(),
+            stl,
             y: y.to_vec()?,
             np,
         })
