@@ -1,7 +1,7 @@
-use num_traits::{Float, AsPrimitive};
+use num_traits::{AsPrimitive, Float};
 
+use crate::stl::{stl, Bound};
 use crate::Error;
-use crate::stl::{Bound, stl};
 
 #[derive(Debug)]
 pub struct StlParams {
@@ -14,9 +14,10 @@ pub struct StlParams {
     nsjump: Option<usize>,
     ntjump: Option<usize>,
     nljump: Option<usize>,
+    fastjump: Option<bool>,
     ni: Option<usize>,
     no: Option<usize>,
-    robust: bool
+    robust: bool,
 }
 
 #[derive(Debug)]
@@ -24,7 +25,7 @@ pub struct StlResult<T: Float + 'static> {
     seasonal: Vec<T>,
     trend: Vec<T>,
     remainder: Vec<T>,
-    weights: Vec<T>
+    weights: Vec<T>,
 }
 
 pub fn params() -> StlParams {
@@ -38,9 +39,10 @@ pub fn params() -> StlParams {
         nsjump: None,
         ntjump: None,
         nljump: None,
+        fastjump: None,
         ni: None,
         no: None,
-        robust: false
+        robust: false,
     }
 }
 
@@ -100,16 +102,26 @@ impl StlParams {
         self
     }
 
+    pub fn fast_jump(&mut self, fastjump: bool) -> &mut Self {
+        self.fastjump = Some(fastjump);
+        self
+    }
+
     pub fn robust(&mut self, robust: bool) -> &mut Self {
         self.robust = robust;
         self
     }
 
-    pub fn fit<T: Bound + 'static>(&self, y: &[T], np: usize) -> Result<StlResult<T>, Error> where usize: AsPrimitive<T> {
+    pub fn fit<T: Bound + 'static>(&self, y: &[T], np: usize) -> Result<StlResult<T>, Error>
+    where
+        usize: AsPrimitive<T>,
+    {
         let n = y.len();
 
         if n < np * 2 {
-            return Err(Error::Series("series has less than two periods".to_string()));
+            return Err(Error::Series(
+                "series has less than two periods".to_string(),
+            ));
         }
 
         let ns = self.ns.unwrap_or(np);
@@ -143,31 +155,52 @@ impl StlParams {
         let ni = self.ni.unwrap_or(if self.robust { 1 } else { 2 });
         let no = self.no.unwrap_or(if self.robust { 15 } else { 0 });
 
-        let nsjump = self.nsjump.unwrap_or(((newns as f32) / 10.0).ceil() as usize);
-        let ntjump = self.ntjump.unwrap_or(((nt as f32) / 10.0).ceil() as usize);
-        let nljump = self.nljump.unwrap_or(((nl as f32) / 10.0).ceil() as usize);
+        let jump_factor = if self.fastjump.unwrap_or(false) {
+            5.0
+        } else {
+            10.0
+        };
+        let nsjump = self
+            .nsjump
+            .unwrap_or(((newns as f32) / jump_factor).ceil() as usize);
+        let ntjump = self
+            .ntjump
+            .unwrap_or(((nt as f32) / jump_factor).ceil() as usize);
+        let nljump = self
+            .nljump
+            .unwrap_or(((nl as f32) / jump_factor).ceil() as usize);
 
         if newns < 3 {
-            return Err(Error::Parameter("seasonal_length must be at least 3".to_string()));
+            return Err(Error::Parameter(
+                "seasonal_length must be at least 3".to_string(),
+            ));
         }
         if nt < 3 {
-            return Err(Error::Parameter("trend_length must be at least 3".to_string()));
+            return Err(Error::Parameter(
+                "trend_length must be at least 3".to_string(),
+            ));
         }
         if nl < 3 {
-            return Err(Error::Parameter("low_pass_length must be at least 3".to_string()));
+            return Err(Error::Parameter(
+                "low_pass_length must be at least 3".to_string(),
+            ));
         }
         if newnp < 2 {
             return Err(Error::Parameter("period must be at least 2".to_string()));
         }
 
         if isdeg != 0 && isdeg != 1 {
-            return Err(Error::Parameter("seasonal_degree must be 0 or 1".to_string()));
+            return Err(Error::Parameter(
+                "seasonal_degree must be 0 or 1".to_string(),
+            ));
         }
         if itdeg != 0 && itdeg != 1 {
             return Err(Error::Parameter("trend_degree must be 0 or 1".to_string()));
         }
         if ildeg != 0 && ildeg != 1 {
-            return Err(Error::Parameter("low_pass_degree must be 0 or 1".to_string()));
+            return Err(Error::Parameter(
+                "low_pass_degree must be 0 or 1".to_string(),
+            ));
         }
 
         if newns % 2 != 1 {
@@ -180,7 +213,25 @@ impl StlParams {
             return Err(Error::Parameter("low_pass_length must be odd".to_string()));
         }
 
-        stl(y, n, newnp, newns, nt, nl, isdeg, itdeg, ildeg, nsjump, ntjump, nljump, ni, no, &mut rw, &mut season, &mut trend);
+        stl(
+            y,
+            n,
+            newnp,
+            newns,
+            nt,
+            nl,
+            isdeg,
+            itdeg,
+            ildeg,
+            nsjump,
+            ntjump,
+            nljump,
+            ni,
+            no,
+            &mut rw,
+            &mut season,
+            &mut trend,
+        );
 
         let mut remainder = Vec::with_capacity(n);
         for i in 0..n {
@@ -191,17 +242,27 @@ impl StlParams {
             seasonal: season,
             trend,
             remainder,
-            weights: rw
+            weights: rw,
         })
     }
 }
 
-fn var<T: Bound + std::iter::Sum<T> + 'static>(series: &[T]) -> T where usize: AsPrimitive<T> {
+fn var<T: Bound + std::iter::Sum<T> + 'static>(series: &[T]) -> T
+where
+    usize: AsPrimitive<T>,
+{
     let mean = series.iter().copied().sum::<T>() / series.len().as_();
-    series.iter().map(|&v| (v - mean).powf(<T as From<f32>>::from(2.0))).sum::<T>() / (series.len().as_() - T::one())
+    series
+        .iter()
+        .map(|&v| (v - mean).powf(<T as From<f32>>::from(2.0)))
+        .sum::<T>()
+        / (series.len().as_() - T::one())
 }
 
-impl<T: Bound + std::iter::Sum<T>+ 'static> StlResult<T> where usize: AsPrimitive<T> {
+impl<T: Bound + std::iter::Sum<T> + 'static> StlResult<T>
+where
+    usize: AsPrimitive<T>,
+{
     pub fn seasonal(&self) -> &Vec<T> {
         &self.seasonal
     }
@@ -219,12 +280,22 @@ impl<T: Bound + std::iter::Sum<T>+ 'static> StlResult<T> where usize: AsPrimitiv
     }
 
     pub fn seasonal_strength(&self) -> T {
-        let sr = self.seasonal().iter().zip(self.remainder()).map(|(&a, &b)| a + b).collect::<Vec<T>>();
+        let sr = self
+            .seasonal()
+            .iter()
+            .zip(self.remainder())
+            .map(|(&a, &b)| a + b)
+            .collect::<Vec<T>>();
         (T::one() - var(self.remainder()) / var(&sr)).max(T::zero())
     }
 
     pub fn trend_strength(&self) -> T {
-        let tr = self.trend().iter().zip(self.remainder()).map(|(&a, &b)| a + b).collect::<Vec<T>>();
+        let tr = self
+            .trend()
+            .iter()
+            .zip(self.remainder())
+            .map(|(&a, &b)| a + b)
+            .collect::<Vec<T>>();
         (T::one() - var(self.remainder()) / var(&tr)).max(T::zero())
     }
 }

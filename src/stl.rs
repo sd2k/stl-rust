@@ -4,14 +4,53 @@
 // STL: A Seasonal-Trend Decomposition Procedure Based on Loess.
 // Journal of Official Statistics, 6(1), 3-33.
 
-use std::ops::{AddAssign, Mul, MulAssign, DivAssign};
+use std::{
+    iter::Sum,
+    ops::{AddAssign, DivAssign, Mul, MulAssign},
+};
 
-use num_traits::{Float, AsPrimitive};
+use num_traits::{AsPrimitive, Float};
+use tracing::instrument;
 
-pub trait Bound: Float + MulAssign + AddAssign + DivAssign + Mul + From<f32> {}
-impl<T> Bound for T where T: Float + MulAssign + AddAssign + DivAssign + Mul + From<f32> {}
+pub trait Bound: Float + MulAssign + AddAssign + DivAssign + Mul + From<f32> + Sum {}
+impl<T> Bound for T where T: Float + MulAssign + AddAssign + DivAssign + Mul + From<f32> + Sum {}
 
-pub fn stl<T: Bound + 'static>(y: &[T], n: usize, np: usize, ns: usize, nt: usize, nl: usize, isdeg: i32, itdeg: i32, ildeg: i32, nsjump: usize, ntjump: usize, nljump: usize, ni: usize, no: usize, rw: &mut [T], season: &mut [T], trend: &mut [T]) where usize: AsPrimitive<T> {
+#[instrument(skip(
+    y, n, np, ns, nt, nl, isdeg, itdeg, ildeg, nsjump, ntjump, nljump, ni, no, rw, season, trend
+))]
+pub fn stl<T: Bound + 'static>(
+    // Input time series.
+    y: &[T],
+    // Length of y.
+    n: usize,
+    // Number of observations per seasonal period.
+    np: usize,
+    // Smoothing parameter for the seasonal filter.
+    ns: usize,
+    // Smoothing parameter for the trend filter.
+    nt: usize,
+    // Smoothing parameter for the low-pass filter.
+    nl: usize,
+    // Seasonal filter degree.
+    isdeg: i32,
+    // Trend filter degree.
+    itdeg: i32,
+    // Low-pass filter degree.
+    ildeg: i32,
+    nsjump: usize,
+    ntjump: usize,
+    nljump: usize,
+    // Number of inner loop iterations.
+    ni: usize,
+    // Number of outer loop (robustness) iterations.
+    no: usize,
+    // Robustness weights.
+    rw: &mut [T],
+    season: &mut [T],
+    trend: &mut [T],
+) where
+    usize: AsPrimitive<T>,
+{
     let mut work1 = vec![T::zero(); n + 2 * np];
     let mut work2 = vec![T::zero(); n + 2 * np];
     let mut work3 = vec![T::zero(); n + 2 * np];
@@ -22,7 +61,10 @@ pub fn stl<T: Bound + 'static>(y: &[T], n: usize, np: usize, ns: usize, nt: usiz
     let mut k = 0;
 
     loop {
-        onestp(y, n, np, ns, nt, nl, isdeg, itdeg, ildeg, nsjump, ntjump, nljump, ni, userw, rw, season, trend, &mut work1, &mut work2, &mut work3, &mut work4, &mut work5);
+        onestp(
+            y, n, np, ns, nt, nl, isdeg, itdeg, ildeg, nsjump, ntjump, nljump, ni, userw, rw,
+            season, trend, &mut work1, &mut work2, &mut work3, &mut work4, &mut work5,
+        );
         k += 1;
         if k > no {
             break;
@@ -35,13 +77,24 @@ pub fn stl<T: Bound + 'static>(y: &[T], n: usize, np: usize, ns: usize, nt: usiz
     }
 
     if no == 0 {
-        for i in 0..n {
-            rw[i] = T::one();
-        }
+        rw.iter_mut().take(n).for_each(|x| *x = T::one());
     }
 }
 
-fn ess<T: Bound + 'static>(y: &[T], n: usize, len: usize, ideg: i32, njump: usize, userw: bool, rw: &[T], ys: &mut [T], res: &mut [T]) where usize: AsPrimitive<T> {
+#[instrument(skip(y, n, len, ideg, njump, userw, rw, ys, res))]
+fn ess<T: Bound + 'static>(
+    y: &[T],
+    n: usize,
+    len: usize,
+    ideg: i32,
+    njump: usize,
+    userw: bool,
+    rw: &[T],
+    ys: &mut [T],
+    res: &mut [T],
+) where
+    usize: AsPrimitive<T>,
+{
     if n < 2 {
         ys[0] = y[0];
         return;
@@ -52,34 +105,65 @@ fn ess<T: Bound + 'static>(y: &[T], n: usize, len: usize, ideg: i32, njump: usiz
 
     let newnj = njump.min(n - 1);
     if len >= n {
+        let _span = tracing::info_span!("ess len >= n").entered();
         nleft = 1;
         nright = n;
         let mut i = 1;
         while i <= n {
-            let ok = est(y, n, len, ideg, i.as_(), &mut ys[i - 1], nleft, nright, res, userw, rw);
+            let ok = est(
+                y,
+                n,
+                len,
+                ideg,
+                i.as_(),
+                &mut ys[i - 1],
+                nleft,
+                nright,
+                res,
+                userw,
+                rw,
+            );
             if !ok {
                 ys[i - 1] = y[i - 1];
             }
             i += newnj;
         }
-    } else if newnj == 1 { // newnj equal to one, len less than n
+    } else if newnj == 1 {
+        let _span = tracing::info_span!("ess newnj == 1").entered();
+        // newnj equal to one, len less than n
         let nsh = (len + 1) / 2;
         nleft = 1;
         nright = len;
-        for i in 1..=n { // fitted value at i
+        for i in 1..=n {
+            // fitted value at i
             if i > nsh && nright != n {
                 nleft += 1;
                 nright += 1;
             }
-            let ok = est(y, n, len, ideg, i.as_(), &mut ys[i - 1], nleft, nright, res, userw, rw);
+            let ok = est(
+                y,
+                n,
+                len,
+                ideg,
+                i.as_(),
+                &mut ys[i - 1],
+                nleft,
+                nright,
+                res,
+                userw,
+                rw,
+            );
             if !ok {
                 ys[i - 1] = y[i - 1];
             }
         }
-    } else { // newnj greater than one, len less than n
+    } else {
+        // newnj greater than one, len less than n
+        let _span = tracing::info_span!("ess newnj > 1, len < n").entered();
         let nsh = (len + 1) / 2;
         let mut i = 1;
-        while i <= n { // fitted value at i
+        while i <= n {
+            // fitted value at i
             if i < nsh {
                 nleft = 1;
                 nright = len;
@@ -90,7 +174,19 @@ fn ess<T: Bound + 'static>(y: &[T], n: usize, len: usize, ideg: i32, njump: usiz
                 nleft = i - nsh + 1;
                 nright = len + i - nsh;
             }
-            let ok = est(y, n, len, ideg, i.as_(), &mut ys[i - 1], nleft, nright, res, userw, rw);
+            let ok = est(
+                y,
+                n,
+                len,
+                ideg,
+                i.as_(),
+                &mut ys[i - 1],
+                nleft,
+                nright,
+                res,
+                userw,
+                rw,
+            );
             if !ok {
                 ys[i - 1] = y[i - 1];
             }
@@ -99,7 +195,9 @@ fn ess<T: Bound + 'static>(y: &[T], n: usize, len: usize, ideg: i32, njump: usiz
     }
 
     if newnj != 1 {
+        let _span1 = tracing::info_span!("ess newnj != 1").entered();
         let mut i = 1;
+        let span2 = tracing::info_span!("ess newnj != 1: while loop").entered();
         while i <= n - newnj {
             let delta = (ys[i + newnj - 1] - ys[i - 1]) / newnj.as_();
             for j in i + 1..=i + newnj - 1 {
@@ -107,9 +205,23 @@ fn ess<T: Bound + 'static>(y: &[T], n: usize, len: usize, ideg: i32, njump: usiz
             }
             i += newnj;
         }
+        drop(span2);
         let k = ((n - 1) / newnj) * newnj + 1;
         if k != n {
-            let ok = est(y, n, len, ideg, n.as_(), &mut ys[n - 1], nleft, nright, res, userw, rw);
+            let _span = tracing::info_span!("ess newnj != 1: k != n").entered();
+            let ok = est(
+                y,
+                n,
+                len,
+                ideg,
+                n.as_(),
+                &mut ys[n - 1],
+                nleft,
+                nright,
+                res,
+                userw,
+                rw,
+            );
             if !ok {
                 ys[n - 1] = y[n - 1];
                 if k != n - 1 {
@@ -123,8 +235,24 @@ fn ess<T: Bound + 'static>(y: &[T], n: usize, len: usize, ideg: i32, njump: usiz
     }
 }
 
-fn est<T: Bound + 'static>(y: &[T], n: usize, len: usize, ideg: i32, xs: T, ys: &mut T, nleft: usize, nright: usize, w: &mut [T], userw: bool, rw: &[T]) -> bool where usize: AsPrimitive<T> {
-    let range= n.as_() - T::one();
+#[instrument(skip(y, n, len, ideg, xs, ys, nleft, nright, w, userw, rw))]
+fn est<T: Bound + 'static>(
+    y: &[T],
+    n: usize,
+    len: usize,
+    ideg: i32,
+    xs: T,
+    ys: &mut T,
+    nleft: usize,
+    nright: usize,
+    w: &mut [T],
+    userw: bool,
+    rw: &[T],
+) -> bool
+where
+    usize: AsPrimitive<T>,
+{
+    let range = n.as_() - T::one();
     let mut h = (xs - nleft.as_()).max(nright.as_() - xs);
 
     if len > n {
@@ -188,55 +316,96 @@ fn est<T: Bound + 'static>(y: &[T], n: usize, len: usize, ideg: i32, xs: T, ys: 
     }
 }
 
-fn fts<T: Bound + 'static>(x: &[T], n: usize, np: usize, trend: &mut [T], work: &mut [T]) where usize: AsPrimitive<T> {
+#[instrument(skip(x, n, np, trend, work))]
+fn fts<T: Bound + 'static>(x: &[T], n: usize, np: usize, trend: &mut [T], work: &mut [T])
+where
+    usize: AsPrimitive<T>,
+{
     ma(x, n, np, trend);
     ma(trend, n - np + 1, np, work);
     ma(work, n - 2 * np + 2, 3, trend);
 }
 
-fn ma<T: Bound + 'static>(x: &[T], n: usize, len: usize, ave: &mut [T]) where usize: AsPrimitive<T> {
+#[instrument(skip(x, n, len, ave))]
+fn ma<T: Bound + 'static>(x: &[T], n: usize, len: usize, ave: &mut [T])
+where
+    usize: AsPrimitive<T>,
+{
     let newn = n - len + 1;
     let flen = len.as_();
     let mut v = T::zero();
 
     // get the first average
-    for i in 0..len {
-        v += x[i];
+    for x_i in &x[..len] {
+        v += *x_i;
     }
 
     ave[0] = v / flen;
     if newn > 1 {
         let mut k = len;
-        let mut m = 0;
-        for j in 1..newn {
+        for (m, a) in &mut ave[1..newn].iter_mut().enumerate() {
             // window down the array
             v = v - x[m] + x[k];
-            ave[j] = v / flen;
+            *a = v / flen;
             k += 1;
-            m += 1;
         }
     }
 }
 
-fn onestp<T: Bound + 'static>(y: &[T], n: usize, np: usize, ns: usize, nt: usize, nl: usize, isdeg: i32, itdeg: i32, ildeg: i32, nsjump: usize, ntjump: usize, nljump: usize, ni: usize, userw: bool, rw: &mut [T], season: &mut [T], trend: &mut [T], work1: &mut [T], work2: &mut [T], work3: &mut [T], work4: &mut [T], work5: &mut [T]) where usize: AsPrimitive<T> {
+#[instrument(skip(
+    y, n, np, ns, nt, nl, isdeg, itdeg, ildeg, nsjump, ntjump, nljump, ni, userw, rw, season,
+    trend, work1, work2, work3, work4, work5
+))]
+fn onestp<T: Bound + 'static>(
+    y: &[T],
+    n: usize,
+    np: usize,
+    ns: usize,
+    nt: usize,
+    nl: usize,
+    isdeg: i32,
+    itdeg: i32,
+    ildeg: i32,
+    nsjump: usize,
+    ntjump: usize,
+    nljump: usize,
+    ni: usize,
+    userw: bool,
+    rw: &mut [T],
+    season: &mut [T],
+    trend: &mut [T],
+    work1: &mut [T],
+    work2: &mut [T],
+    work3: &mut [T],
+    work4: &mut [T],
+    work5: &mut [T],
+) where
+    usize: AsPrimitive<T>,
+{
     for _ in 0..ni {
+        // Detrend.
         for i in 0..n {
             work1[i] = y[i] - trend[i];
         }
 
-        ss(work1, n, np, ns, isdeg, nsjump, userw, rw, work2, work3, work4, work5, season);
+        ss(
+            work1, n, np, ns, isdeg, nsjump, userw, rw, work2, work3, work4, work5, season,
+        );
         fts(work2, n + 2 * np, np, work3, work1);
         ess(work3, n, nl, ildeg, nljump, false, work4, work1, work5);
         for i in 0..n {
             season[i] = work2[np + i] - work1[i];
         }
+        // Deseasonalise.
         for i in 0..n {
             work1[i] = y[i] - season[i];
         }
+        // Trend smoothing.
         ess(work1, n, nt, itdeg, ntjump, userw, rw, trend, work3);
     }
 }
 
+#[instrument(skip(y, fit, rw))]
 fn rwts<T: Bound>(y: &[T], n: usize, fit: &[T], rw: &mut [T]) {
     for i in 0..n {
         rw[i] = (y[i] - fit[i]).abs();
@@ -263,7 +432,27 @@ fn rwts<T: Bound>(y: &[T], n: usize, fit: &[T], rw: &mut [T]) {
     }
 }
 
-fn ss<T: Bound + 'static>(y: &[T], n: usize, np: usize, ns: usize, isdeg: i32, nsjump: usize, userw: bool, rw: &[T], season: &mut [T], work1: &mut [T], work2: &mut [T], work3: &mut [T], work4: &mut [T]) where usize: AsPrimitive<T> {
+/// Seasonal smoothing.
+#[instrument(skip(
+    y, n, np, ns, isdeg, nsjump, userw, rw, season, work1, work2, work3, work4
+))]
+fn ss<T: Bound + 'static>(
+    y: &[T],
+    n: usize,
+    np: usize,
+    ns: usize,
+    isdeg: i32,
+    nsjump: usize,
+    userw: bool,
+    rw: &[T],
+    season: &mut [T],
+    work1: &mut [T],
+    work2: &mut [T],
+    work3: &mut [T],
+    work4: &mut [T],
+) where
+    usize: AsPrimitive<T>,
+{
     for j in 1..=np {
         let k = (n - j) / np + 1;
 
@@ -275,16 +464,50 @@ fn ss<T: Bound + 'static>(y: &[T], n: usize, np: usize, ns: usize, isdeg: i32, n
                 work3[i - 1] = rw[(i - 1) * np + j - 1];
             }
         }
-        ess(work1, k, ns, isdeg, nsjump, userw, work3, &mut work2[1..], work4);
+        ess(
+            work1,
+            k,
+            ns,
+            isdeg,
+            nsjump,
+            userw,
+            work3,
+            &mut work2[1..],
+            work4,
+        );
         let mut xs = T::zero();
         let nright = ns.min(k);
-        let ok = est(work1, k, ns, isdeg, xs, &mut work2[0], 1, nright, work4, userw, work3);
+        let ok = est(
+            work1,
+            k,
+            ns,
+            isdeg,
+            xs,
+            &mut work2[0],
+            1,
+            nright,
+            work4,
+            userw,
+            work3,
+        );
         if !ok {
             work2[0] = work2[1];
         }
         xs = (k + 1).as_();
         let nleft = 1.max(k as i32 - ns as i32 + 1) as usize;
-        let ok = est(work1, k, ns, isdeg, xs, &mut work2[k + 1], nleft, k, work4, userw, work3);
+        let ok = est(
+            work1,
+            k,
+            ns,
+            isdeg,
+            xs,
+            &mut work2[k + 1],
+            nleft,
+            k,
+            work4,
+            userw,
+            work3,
+        );
         if !ok {
             work2[k + 1] = work2[k];
         }
