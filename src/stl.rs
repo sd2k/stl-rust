@@ -264,53 +264,69 @@ where
 
     // compute weights
     let mut a = T::zero();
-    for j in nleft..=nright {
-        w[j - 1] = T::zero();
-        let r = (j.as_() - xs).abs();
+    for (j, w_j) in w.iter_mut().enumerate().take(nright).skip(nleft - 1) {
+        *w_j = T::zero();
+        let r = ((j + 1).as_() - xs).abs();
         if r <= h9 {
             if r <= h1 {
-                w[j - 1] = T::one();
+                *w_j = T::one();
             } else {
-                w[j - 1] = (T::one() - (r / h).powi(3)).powi(3);
+                *w_j = (T::one() - (r / h).powi(3)).powi(3);
             }
             if userw {
-                w[j - 1] *= rw[j - 1];
+                *w_j *= rw[j];
             }
-            a += w[j - 1];
+            a += *w_j;
         }
     }
 
     if a <= T::zero() {
         false
-    } else { // weighted least squares
-        for j in nleft..=nright { // make sum of w(j) == 1
-            w[j - 1] /= a;
-        }
+    } else {
+        // weighted least squares
+        w.iter_mut()
+            .take(nright)
+            .skip(nleft - 1)
+            .for_each(|w| *w /= a);
 
-        if h > T::zero() && ideg > 0 { // use linear fit
-            let mut a = T::zero();
-            for j in nleft..=nright { // weighted center of x values
-                a += w[j - 1] * j.as_();
-            }
+        if h > T::zero() && ideg > 0 {
+            // use linear fit
+            let a = w
+                .iter()
+                .enumerate()
+                .take(nright)
+                .skip(nleft - 1)
+                .map(|(j, w_j)| *w_j * (j + 1).as_())
+                .sum();
             let mut b = xs - a;
-            let mut c = T::zero();
-            for j in nleft..=nright {
-                c += w[j - 1] * (j.as_() - a).powi(2);
-            }
+            let c: T = w
+                .iter()
+                .enumerate()
+                .take(nright)
+                .skip(nleft - 1)
+                .map(|(j, w_j)| *w_j * ((j + 1).as_() - a).powi(2))
+                .sum();
             if c.sqrt() > <T as From<f32>>::from(0.001) * range {
                 b /= c;
 
                 // points are spread out enough to compute slope
-                for j in nleft..=nright {
-                    w[j - 1] *= b * (j.as_() - a) + 1.0.into();
-                }
+                w.iter_mut()
+                    .enumerate()
+                    .take(nright)
+                    .skip(nleft - 1)
+                    .for_each(|(j, w_j)| {
+                        *w_j *= b * ((j + 1).as_() - a) + 1.0.into();
+                    });
             }
         }
 
-        *ys = 0.0.into();
-        for j in nleft..=nright {
-            *ys += w[j - 1] * y[j - 1];
-        }
+        *ys = w
+            .iter()
+            .zip(y.iter())
+            .take(nright)
+            .skip(nleft - 1)
+            .map(|(&w, &y)| w * y)
+            .sum();
 
         true
     }
