@@ -77,58 +77,6 @@ impl PySTL {
         })
     }
 
-    pub fn seasonal_length(&mut self, ns: usize) {
-        self.stl.seasonal_length(ns);
-    }
-
-    pub fn trend_length(&mut self, nt: usize) {
-        self.stl.trend_length(nt);
-    }
-
-    pub fn low_pass_length(&mut self, nl: usize) {
-        self.stl.low_pass_length(nl);
-    }
-
-    pub fn seasonal_degree(&mut self, isdeg: i32) {
-        self.stl.seasonal_degree(isdeg);
-    }
-
-    pub fn trend_degree(&mut self, itdeg: i32) {
-        self.stl.trend_degree(itdeg);
-    }
-
-    pub fn low_pass_degree(&mut self, ildeg: i32) {
-        self.stl.low_pass_degree(ildeg);
-    }
-
-    pub fn seasonal_jump(&mut self, nsjump: usize) {
-        self.stl.seasonal_jump(nsjump);
-    }
-
-    pub fn trend_jump(&mut self, ntjump: usize) {
-        self.stl.trend_jump(ntjump);
-    }
-
-    pub fn low_pass_jump(&mut self, nljump: usize) {
-        self.stl.low_pass_jump(nljump);
-    }
-
-    pub fn inner_loops(&mut self, ni: usize) {
-        self.stl.inner_loops(ni);
-    }
-
-    pub fn outer_loops(&mut self, no: usize) {
-        self.stl.outer_loops(no);
-    }
-
-    pub fn fast_jump(&mut self, fastjump: bool) {
-        self.stl.fast_jump(fastjump);
-    }
-
-    pub fn robust(&mut self, robust: bool) {
-        self.stl.robust(robust);
-    }
-
     pub fn fit(&self) -> PyResult<StlFit> {
         self.stl
             .fit(&self.y, self.np)
