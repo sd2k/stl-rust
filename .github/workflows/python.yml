@@ -3,6 +3,8 @@
 #
 #    maturin new pystl
 #
+name: build-python
+
 on:
   push:
     branches:
