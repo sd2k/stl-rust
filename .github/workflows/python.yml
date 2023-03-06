@@ -34,11 +34,12 @@ jobs:
           args: --release --out dist --find-interpreter
           sccache: 'true'
           manylinux: auto
+          working-directory: pystl
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
           name: wheels
-          path: dist
+          path: pystl/dist
 
   windows:
     runs-on: windows-latest
@@ -57,11 +58,12 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter
           sccache: 'true'
+          working-directory: pystl
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
           name: wheels
-          path: dist
+          path: pystl/dist
 
   macos:
     runs-on: macos-latest
@@ -79,11 +81,12 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter
           sccache: 'true'
+          working-directory: pystl
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
           name: wheels
-          path: dist
+          path: pystl/dist
 
   sdist:
     runs-on: ubuntu-latest
@@ -94,11 +97,12 @@ jobs:
         with:
           command: sdist
           args: --out dist
+          working-directory: pystl
       - name: Upload sdist
         uses: actions/upload-artifact@v3
         with:
           name: wheels
-          path: dist
+          path: pystl/dist
 
   release:
     name: Release
