@@ -94,11 +94,10 @@ pub struct StlFit {
 
 impl StlFit {
     fn from_stl_result(stl: stlrs::StlResult<f64>) -> Self {
-        let (seasonal, trend, remainder, _) = stl.into_parts();
         Self {
-            seasonal: Python::with_gil(|py| seasonal.into_pyarray(py).into()),
-            trend: Python::with_gil(|py| trend.into_pyarray(py).into()),
-            remainder: Python::with_gil(|py| remainder.into_pyarray(py).into()),
+            seasonal: Python::with_gil(|py| stl.seasonal.into_pyarray(py).into()),
+            trend: Python::with_gil(|py| stl.trend.into_pyarray(py).into()),
+            remainder: Python::with_gil(|py| stl.remainder.into_pyarray(py).into()),
         }
     }
 }

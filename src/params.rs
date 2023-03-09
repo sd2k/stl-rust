@@ -22,10 +22,10 @@ pub struct StlParams {
 
 #[derive(Debug)]
 pub struct StlResult<T: Float + 'static> {
-    seasonal: Vec<T>,
-    trend: Vec<T>,
-    remainder: Vec<T>,
-    weights: Vec<T>,
+    pub seasonal: Vec<T>,
+    pub trend: Vec<T>,
+    pub remainder: Vec<T>,
+    pub weights: Vec<T>,
 }
 
 pub fn params() -> StlParams {
