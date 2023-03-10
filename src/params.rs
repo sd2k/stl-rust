@@ -3,7 +3,7 @@ use num_traits::{AsPrimitive, Float};
 use crate::stl::{stl, Bound};
 use crate::Error;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct StlParams {
     ns: Option<usize>,
     nt: Option<usize>,
@@ -20,7 +20,7 @@ pub struct StlParams {
     robust: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct StlResult<T: Float + 'static> {
     pub seasonal: Vec<T>,
     pub trend: Vec<T>,
