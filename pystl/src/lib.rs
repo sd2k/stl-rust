@@ -10,44 +10,49 @@ pub struct PySTL {
     np: usize,
 }
 
+/// Calculate the Seasonal-Trend decomposition of a time series.
 #[pymethods]
 impl PySTL {
     #[new]
+    // Arguments here match statsmodels.tsa.seasonal.STL (plus a few extra)
+    // so that the API matches, so ignore clippy's complaint.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        y: PyReadonlyArrayDyn<'_, f64>,
-        np: usize,
-        seasonal_length: Option<usize>,
-        trend_length: Option<usize>,
-        low_pass_length: Option<usize>,
-        seasonal_degree: Option<i32>,
-        trend_degree: Option<i32>,
-        low_pass_degree: Option<i32>,
+        endog: PyReadonlyArrayDyn<'_, f64>,
+        period: usize,
+        seasonal: Option<usize>,
+        trend: Option<usize>,
+        low_pass: Option<usize>,
+        seasonal_deg: Option<i32>,
+        trend_deg: Option<i32>,
+        low_pass_deg: Option<i32>,
+        robust: Option<bool>,
         seasonal_jump: Option<usize>,
         trend_jump: Option<usize>,
         low_pass_jump: Option<usize>,
-        outer_loops: Option<usize>,
-        inner_loops: Option<usize>,
         fast_jump: Option<bool>,
-        robust: Option<bool>,
     ) -> PyResult<Self> {
         let mut stl = params();
-        if let Some(x) = seasonal_length {
+        if let Some(x) = seasonal {
             stl.seasonal_length(x);
         }
-        if let Some(x) = trend_length {
+        if let Some(x) = trend {
             stl.trend_length(x);
         }
-        if let Some(x) = low_pass_length {
+        if let Some(x) = low_pass {
             stl.low_pass_length(x);
         }
-        if let Some(x) = seasonal_degree {
+        if let Some(x) = seasonal_deg {
             stl.seasonal_degree(x);
         }
-        if let Some(x) = trend_degree {
+        if let Some(x) = trend_deg {
             stl.trend_degree(x);
         }
-        if let Some(x) = low_pass_degree {
+        if let Some(x) = low_pass_deg {
             stl.low_pass_degree(x);
+        }
+        if let Some(x) = robust {
+            stl.robust(x);
         }
         if let Some(x) = seasonal_jump {
             stl.seasonal_jump(x);
@@ -58,26 +63,28 @@ impl PySTL {
         if let Some(x) = low_pass_jump {
             stl.low_pass_jump(x);
         }
-        if let Some(x) = outer_loops {
-            stl.outer_loops(x);
-        }
-        if let Some(x) = inner_loops {
-            stl.inner_loops(x);
-        }
         if let Some(x) = fast_jump {
             stl.fast_jump(x);
         }
-        if let Some(x) = robust {
-            stl.robust(x);
-        }
         Ok(Self {
             stl,
-            y: y.to_vec()?,
-            np,
+            y: endog.to_vec()?,
+            np: period,
         })
     }
 
-    pub fn fit(&self) -> PyResult<StlFit> {
+    /// Fit the STL model to the data.
+    pub fn fit(
+        &mut self,
+        outer_iter: Option<usize>,
+        inner_iter: Option<usize>,
+    ) -> PyResult<StlFit> {
+        if let Some(x) = outer_iter {
+            self.stl.outer_loops(x);
+        }
+        if let Some(x) = inner_iter {
+            self.stl.inner_loops(x);
+        }
         self.stl
             .fit(&self.y, self.np)
             .map(StlFit::from_stl_result)
@@ -85,11 +92,21 @@ impl PySTL {
     }
 }
 
+/// A fitted STL model.
+///
+/// Contains the seasonal, trend, and remainder components of the decomposition.
+/// These are all `numpy` arrays.
 #[pyclass]
 pub struct StlFit {
+    /// The estimated seasonal component.
+    #[pyo3(get)]
     seasonal: Py<PyArray1<f64>>,
+    /// The estimated trend component.
+    #[pyo3(get)]
     trend: Py<PyArray1<f64>>,
-    remainder: Py<PyArray1<f64>>,
+    /// The estimated residuals.
+    #[pyo3(get)]
+    resid: Py<PyArray1<f64>>,
 }
 
 impl StlFit {
@@ -97,23 +114,8 @@ impl StlFit {
         Self {
             seasonal: Python::with_gil(|py| stl.seasonal.into_pyarray(py).into()),
             trend: Python::with_gil(|py| stl.trend.into_pyarray(py).into()),
-            remainder: Python::with_gil(|py| stl.remainder.into_pyarray(py).into()),
+            resid: Python::with_gil(|py| stl.remainder.into_pyarray(py).into()),
         }
-    }
-}
-
-#[pymethods]
-impl StlFit {
-    pub fn seasonal(&self) -> &Py<PyArray1<f64>> {
-        &self.seasonal
-    }
-
-    pub fn trend(&self) -> &Py<PyArray1<f64>> {
-        &self.trend
-    }
-
-    pub fn remainder(&self) -> &Py<PyArray1<f64>> {
-        &self.remainder
     }
 }
 
