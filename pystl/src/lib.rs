@@ -4,7 +4,7 @@ use stlrs::{params, StlParams};
 
 #[derive(Debug)]
 #[pyclass]
-pub struct PySTL {
+pub struct FastSTL {
     stl: StlParams,
     y: Vec<f64>,
     np: usize,
@@ -12,7 +12,7 @@ pub struct PySTL {
 
 /// Calculate the Seasonal-Trend decomposition of a time series.
 #[pymethods]
-impl PySTL {
+impl FastSTL {
     #[new]
     // Arguments here match statsmodels.tsa.seasonal.STL (plus a few extra)
     // so that the API matches, so ignore clippy's complaint.
@@ -78,7 +78,7 @@ impl PySTL {
         &mut self,
         outer_iter: Option<usize>,
         inner_iter: Option<usize>,
-    ) -> PyResult<StlFit> {
+    ) -> PyResult<STLFit> {
         if let Some(x) = outer_iter {
             self.stl.outer_loops(x);
         }
@@ -87,7 +87,7 @@ impl PySTL {
         }
         self.stl
             .fit(&self.y, self.np)
-            .map(StlFit::from_stl_result)
+            .map(STLFit::from_stl_result)
             .map_err(|x| PyException::new_err(x.to_string()))
     }
 }
@@ -97,7 +97,7 @@ impl PySTL {
 /// Contains the seasonal, trend, and remainder components of the decomposition.
 /// These are all `numpy` arrays.
 #[pyclass]
-pub struct StlFit {
+pub struct STLFit {
     /// The estimated seasonal component.
     #[pyo3(get)]
     seasonal: Py<PyArray1<f64>>,
@@ -109,7 +109,7 @@ pub struct StlFit {
     resid: Py<PyArray1<f64>>,
 }
 
-impl StlFit {
+impl STLFit {
     fn from_stl_result(stl: stlrs::StlResult<f64>) -> Self {
         Self {
             seasonal: Python::with_gil(|py| stl.seasonal.into_pyarray(py).into()),
@@ -119,10 +119,10 @@ impl StlFit {
     }
 }
 
-/// A Python module implemented in Rust.
+/// Fast Seasonal-Trend decomposition using Loess.
 #[pymodule]
-fn pystl(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<PySTL>()?;
-    m.add_class::<StlFit>()?;
+fn faststl(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_class::<FastSTL>()?;
+    m.add_class::<STLFit>()?;
     Ok(())
 }
