@@ -1,5 +1,6 @@
 use super::{Error, StlParams, StlResult};
 
+#[derive(Debug, Clone)]
 pub struct Stl;
 
 impl Stl {

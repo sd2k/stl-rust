@@ -1,5 +1,6 @@
 use super::{Error, MstlParams, MstlResult};
 
+#[derive(Clone, Debug)]
 pub struct Mstl;
 
 impl Mstl {
